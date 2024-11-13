@@ -59,9 +59,9 @@
 
 (defun dict-cheat ()
   (interactive nil dict-mode)
-  (lexical-let ((anas (dict-anagrams (dict-word-at-line))))
+  (let ((dict-anas (dict-anagrams (dict-word-at-line))))
     (progn
-      (mapc #'message anas)
+      (mapc #'message dict-anas)
       (let ((inhibit-read-only t))
         (save-excursion
           (goto-char (line-beginning-position))
@@ -69,7 +69,7 @@
           (forward-char 3)
           (forward-char word-size)
           (delete-region (point) (line-end-position))
-          (mapc #'(lambda (x) (insert-char ?\s) (insert x)) anas))))))
+          (mapc #'(lambda (x) (insert-char ?\s) (insert x)) dict-anas))))))
 
 (defun dict-backspace ()
   (interactive nil dict-mode)
@@ -173,8 +173,8 @@
 
 (defun dict-char-ok (c words bwords)
   (progn
-    (lexical-let ((awords (sort (cons c (remove ?\s words)) '<)))
-      (dict-list-comp '= awords bwords)
+    (let ((dict-awords (sort (cons c (remove ?\s words)) '<)))
+      (dict-list-comp '= dict-awords bwords)
     )
   )
 )
@@ -193,14 +193,14 @@
 )
 
 (defun entered-words ()
-  (lexical-let ((ews nil))
+  (let ((dict-ews nil))
     (save-excursion
       (goto-char (point-min))
       (while(<= (line-number-at-pos) (length words))
-        (setq ews (cons (dict-entered-word-at-line) ews))
+        (setq dict-ews (cons (dict-entered-word-at-line) dict-ews))
         (forward-line)
       ))
-    ews
+    dict-ews
     )
 )
 
