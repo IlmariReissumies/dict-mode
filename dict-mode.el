@@ -248,7 +248,7 @@
   (dict-mode)
 )
 
-(put 'dict-mode-mode 'mode-class 'special)
+(put 'dict-mode 'mode-class 'special)
 
 (add-hook 'dict-mode-hook
           (lambda ()
@@ -259,6 +259,14 @@
                   (dict-mode-draw-words)
                   (goto-char (point-min)))
               (message "Dict mode should not be invoked directly"))))
+
+(defun dict-initialise (file-name)
+  (setq dict-file-short file-name)
+  (setq dict-file (concat "/home/cic/ordlistor/split/" dict-file-short))
+  (setq words (dict-mode-read-lines dict-file))
+  (setq word-size (length (car words)))
+  (run-hooks 'dict-mode-hook)
+)
 
 (defun dict-add-map (k)
   (define-key dict-mode-map k `(lambda () (interactive) (dict-keypress ,k)))
@@ -271,6 +279,9 @@
 (define-key dict-mode-map (kbd "SPC") 'dict-advance)
 (define-key dict-mode-map (kbd "RET") 'dict-advance)
 (define-key dict-mode-map (kbd "C-c") 'dict-cheat)
+(define-key dict-mode-map (kbd "M-n") 'dict-next)
+(define-key dict-mode-map (kbd "M-p") 'dict-previous)
+(define-key dict-mode-map (kbd "M-s") 'dict-reset)
 
 (defun dict-mode-draw-line (word)
   (let ((inhibit-read-only t))
@@ -292,3 +303,35 @@
                              (line-beginning-position)
                              (line-end-position))
                        (forward-line 1)))))
+
+; https://emacs.stackexchange.com/questions/12153/does-some-command-exist-which-goes-to-the-next-file-of-the-current-directory
+(defun dict-find-next-file (file &optional backward)
+  "Find the next file (by name) in the current directory. With prefix arg, find the previous file."
+  (interactive "P")
+  (let* ((files (cl-remove-if (lambda (file) (cl-first (file-attributes file)))
+                              (sort (directory-files "/home/cic/ordlistor/split/" nil nil t) 'string<)))
+           (pos
+            (mod (+ (cl-position file files :test 'equal) (if backward -1 1))
+                 (length files))))
+         (progn
+           (message (nth pos files))
+           (nth pos files)
+           )))
+
+(defun dict-next ()
+  (interactive nil dict-mode)
+  (setq dict-file-short (dict-find-next-file dict-file-short))
+  (dict-initialise dict-file-short)
+)
+
+(defun dict-previous ()
+  (interactive nil dict-mode)
+  (setq dict-file-short (dict-find-next-file dict-file-short t))
+  (dict-initialise dict-file-short)
+)
+
+(defun dict-reset ()
+  (interactive nil dict-mode)
+  (message dict-file-short)
+  (dict-initialise dict-file-short)
+)
