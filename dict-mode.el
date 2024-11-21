@@ -34,7 +34,7 @@
 (defun dict-check-all ()
   (save-excursion
     (goto-char (point-min))
-    (while(<= (line-number-at-pos) (length words))
+    (while(<= (line-number-at-pos) (length dict-words))
       (dict-check-line-paint-only)
       (forward-line)))
 )
@@ -52,7 +52,7 @@
 (defun dict-clear-all ()
   (save-excursion
     (goto-char (point-min))
-    (while(<= (line-number-at-pos) (length words))
+    (while(<= (line-number-at-pos) (length dict-words))
       (dict-clear-line)
       (forward-line)))
 )
@@ -182,9 +182,9 @@
 ; (One of the) correct words at the n:th line
 (defun dict-word-at-line ()
   (if
-      (>= (- (line-number-at-pos) 1) (length words))
+      (>= (- (line-number-at-pos) 1) (length dict-words))
       nil
-    (nth (- (line-number-at-pos) 1) words)))
+    (nth (- (line-number-at-pos) 1) dict-words)))
 
 (defun dict-entered-word-at-line ()
   (if (< (- word-size 1) (- (point-max) (line-beginning-position)))
@@ -196,7 +196,7 @@
   (let ((dict-ews nil))
     (save-excursion
       (goto-char (point-min))
-      (while(<= (line-number-at-pos) (length words))
+      (while(<= (line-number-at-pos) (length dict-words))
         (setq dict-ews (cons (dict-entered-word-at-line) dict-ews))
         (forward-line)
       ))
@@ -204,16 +204,31 @@
     )
 )
 
-(defun dict-word-correct ()
-  (dict-list-exists `(lambda (x) (string= x ,(dict-entered-word-at-line))) words)
+(defun entered-relevant-words ()
+  (mapcar #'(lambda (x) (save-excursion
+                        (goto-line (+ x 1))
+                        (dict-entered-word-at-line)
+                        ))
+    (gethash (dict-sort-word (dict-entered-word-at-line)) dict-word-to-lines))
 )
+
+(defun dict-word-correct ()
+  (let ((dw (dict-entered-word-at-line)))
+    (let ((dws (dict-sort-word dw)))
+      (let ((dwls (gethash dws dict-word-to-lines)))
+        (when dwls
+          (dict-list-exists
+           `(lambda (x) (string= x ,dw))
+           (mapcar
+            `(lambda (x) (gethash x dict-lines-to-word))
+            dwls)))))))
 
 (defun dict-word-unique ()
   (= 1
      (length
       (seq-filter
        `(lambda (x) (string= x ,(dict-entered-word-at-line)))
-       (entered-words))))
+       (entered-relevant-words))))
 )
 
 (defun dict-sort-word (w)
@@ -223,15 +238,17 @@
 (defun dict-anagrams (w)
   (seq-filter
        (lambda (x) (string= (dict-sort-word x) (dict-sort-word w)))
-       words))
+       dict-words))
 
 (defun dict-mode-variables ()
   (set (make-local-variable 'dict-file-short)
        (let ((insert-default-directory nil))
          (read-file-name "Choose a dictionary segment " "/home/cic/ordlistor/split/")))
-  (set (make-local-variable 'dict-file) (concat "/home/cic/ordlistor/split/" dict-file-short))
-  (set (make-local-variable 'words) (dict-mode-read-lines dict-file))
-  (set (make-local-variable 'word-size) (length (car words)))
+  (set (make-local-variable 'dict-file) nil)
+  (set (make-local-variable 'dict-words) nil)
+  (set (make-local-variable 'word-size) nil)
+  (set (make-local-variable 'dict-word-to-lines) nil)
+  (set (make-local-variable 'dict-lines-to-word) nil)
 )
 
 
@@ -239,6 +256,7 @@
   "\\<dict-mode-map>Major mode for anagram practice."
   :interactive nil
   (dict-mode-variables)
+  (dict-initialise dict-file-short)
 )
 
 (defun dict ()
@@ -263,8 +281,22 @@
 (defun dict-initialise (file-name)
   (setq dict-file-short file-name)
   (setq dict-file (concat "/home/cic/ordlistor/split/" dict-file-short))
-  (setq words (dict-mode-read-lines dict-file))
-  (setq word-size (length (car words)))
+  (setq dict-words (dict-mode-read-lines dict-file))
+  (setq word-size (length (car dict-words)))
+  (setq dict-word-to-lines (make-hash-table :test 'equal :size 100))
+  (setq dict-lines-to-word (make-hash-table :test 'equal :size 100))
+  (let ((dict-counter 0))
+    (mapc #'(lambda (x)
+              (let ((x-sort (dict-sort-word x)))
+                (progn
+                  (if (gethash x-sort dict-word-to-lines)
+                      (puthash x-sort
+                               (cons dict-counter (gethash x-sort dict-word-to-lines))
+                               dict-word-to-lines)
+                    (puthash x-sort (list dict-counter) dict-word-to-lines))
+                  (puthash dict-counter x dict-lines-to-word)
+                  (setq dict-counter (+ dict-counter 1)))))
+          dict-words))
   (run-hooks 'dict-mode-hook)
 )
 
@@ -292,7 +324,7 @@
 
 (defun dict-mode-draw-words ()
   (set-mark nil)
-  (mapc #'dict-mode-draw-line words)
+  (mapc #'dict-mode-draw-line dict-words)
 )
 
 (defun dict-mode-read-lines (file)
